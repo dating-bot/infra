@@ -1,0 +1,72 @@
+services:
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: dating_bot_valkey
+    command: ["valkey-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - dating_bot
+
+  valkey-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    container_name: dating_bot_valkey_exporter
+    environment:
+      REDIS_ADDR: "valkey:6379"
+    ports:
+      - "9121:9121"
+    depends_on:
+      valkey:
+        condition: service_healthy
+    networks:
+      - dating_bot
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    container_name: dating_bot_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    networks:
+      - dating_bot
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: dating_bot_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3000
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - dating_bot
+
+volumes:
+  valkey-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  dating_bot:
+    name: dating_bot_net
+    driver: bridge
