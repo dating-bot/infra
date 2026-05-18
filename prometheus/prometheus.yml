@@ -5,8 +5,45 @@ global:
 scrape_configs:
   - job_name: prometheus
     static_configs:
-      - targets: ["localhost:9090"]
+      - targets: ["prometheus:9090"]
 
   - job_name: valkey
     static_configs:
       - targets: ["valkey-exporter:9121"]
+
+  - job_name: gateway
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["gateway-server:8080"]
+
+  - job_name: ai-openrouter
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["ai-celery:9109"]
+
+  - job_name: postgres-profile
+    static_configs:
+      - targets: ["profile-postgres-exporter:9187"]
+
+  - job_name: postgres-ranking
+    static_configs:
+      - targets: ["ranking-postgres-exporter:9187"]
+
+  - job_name: postgres-match
+    static_configs:
+      - targets: ["match-postgres-exporter:9187"]
+
+  - job_name: celery-flower-ai
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["flower-ai:5555"]
+
+  - job_name: celery-flower-ranking
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["flower-ranking:5555"]
+
+  - job_name: celery-flower-match
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["flower-match:5555"]

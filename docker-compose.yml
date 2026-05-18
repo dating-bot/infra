@@ -15,52 +15,6 @@ services:
     networks:
       - dating_bot
 
-  valkey-exporter:
-    image: oliver006/redis_exporter:v1.66.0
-    container_name: dating_bot_valkey_exporter
-    environment:
-      REDIS_ADDR: "valkey:6379"
-    ports:
-      - "9121:9121"
-    depends_on:
-      valkey:
-        condition: service_healthy
-    networks:
-      - dating_bot
-
-  prometheus:
-    image: prom/prometheus:v3.2.1
-    container_name: dating_bot_prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.enable-lifecycle"
-    networks:
-      - dating_bot
-
-  grafana:
-    image: grafana/grafana:11.5.2
-    container_name: dating_bot_grafana
-    ports:
-      - "3000:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_SERVER_ROOT_URL: http://localhost:3000
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-    depends_on:
-      - prometheus
-    networks:
-      - dating_bot
-
   rabbitmq:
     image: rabbitmq:4-management-alpine
     container_name: dating_bot_rabbitmq
@@ -97,6 +51,147 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - dating_bot
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: dating_bot_jaeger
+    ports:
+      - "16686:16686"
+      - "14250:14250"
+    networks:
+      - dating_bot
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    container_name: dating_bot_otel_collector
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317"
+    depends_on:
+      - jaeger
+    networks:
+      - dating_bot
+
+  valkey-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    container_name: dating_bot_valkey_exporter
+    command: ["--redis.addr=redis://valkey:6379"]
+    depends_on:
+      valkey:
+        condition: service_healthy
+    networks:
+      - dating_bot
+
+  profile-postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: dating_bot_profile_postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://${PROFILE_POSTGRES_USER:-postgres}:${PROFILE_POSTGRES_PASSWORD:-postgres}@profile_postgres:5432/${PROFILE_POSTGRES_DB:-profile_service}?sslmode=disable
+    networks:
+      - dating_bot
+
+  ranking-postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: dating_bot_ranking_postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://ranking:ranking@ranking_postgres:5432/ranking?sslmode=disable
+    networks:
+      - dating_bot
+
+  match-postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: dating_bot_match_postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://match:match@match_postgres:5432/match?sslmode=disable
+    networks:
+      - dating_bot
+
+  flower-ai:
+    image: mher/flower:2.0.1
+    container_name: dating_bot_flower_ai
+    command:
+      - celery
+      - "--broker=redis://valkey:6379/1"
+      - flower
+      - "--port=5555"
+      - "--persistent=false"
+    depends_on:
+      valkey:
+        condition: service_healthy
+    ports:
+      - "5555:5555"
+    networks:
+      - dating_bot
+
+  flower-ranking:
+    image: mher/flower:2.0.1
+    container_name: dating_bot_flower_ranking
+    command:
+      - celery
+      - "--broker=redis://valkey:6379/0"
+      - flower
+      - "--port=5555"
+      - "--persistent=false"
+    depends_on:
+      valkey:
+        condition: service_healthy
+    ports:
+      - "5556:5555"
+    networks:
+      - dating_bot
+
+  flower-match:
+    image: mher/flower:2.0.1
+    container_name: dating_bot_flower_match
+    command:
+      - celery
+      - "--broker=redis://valkey:6379/2"
+      - flower
+      - "--port=5555"
+      - "--persistent=false"
+    depends_on:
+      valkey:
+        condition: service_healthy
+    ports:
+      - "5557:5555"
+    networks:
+      - dating_bot
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    container_name: dating_bot_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    networks:
+      - dating_bot
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    container_name: dating_bot_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3000
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
     networks:
       - dating_bot
 
